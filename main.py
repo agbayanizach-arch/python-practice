@@ -4,6 +4,7 @@ import asyncio
 import random
 import re
 import discord
+from discord import app_commands
 from discord.ext import commands
 from flask import Flask
 from threading import Thread
@@ -31,17 +32,17 @@ class GiveawayView(discord.ui.View):
         super().__init__(timeout=None)
         self.entrants = set()
 
-    @discord.ui.button(label="Join 🎉", style=discord.ButtonStyle.blurple, custom_id="join_giveaway_btn")
+    @discord.ui.button(label="Join ðŸŽ‰", style=discord.ButtonStyle.blurple, custom_id="join_giveaway_btn")
     async def join_giveaway(self, interaction: discord.Interaction, button: discord.ui.Button):
         user_id = interaction.user.id
         if user_id in self.entrants:
             self.entrants.remove(user_id)
-            await interaction.response.send_message("👋 You left the giveaway.", ephemeral=True)
+            await interaction.response.send_message("ðŸ‘‹ You left the giveaway.", ephemeral=True)
         else:
             self.entrants.add(user_id)
-            await interaction.response.send_message("🎉 You have successfully entered the giveaway!", ephemeral=True)
+            await interaction.response.send_message("ðŸŽ‰ You have successfully entered the giveaway!", ephemeral=True)
         
-        button.label = f"Join 🎉 ({len(self.entrants)})"
+        button.label = f"Join ðŸŽ‰ ({len(self.entrants)})"
         await interaction.message.edit(view=self)
 
 # --- 3. BOT ARCHITECTURE ---
@@ -85,8 +86,8 @@ async def run_giveaway(channel, prize, duration, winners_count, embed_msg, view)
     entrants_list = list(view.entrants)
     if not entrants_list:
         no_winner_embed = discord.Embed(
-            title="🎁 GIVEAWAY ENDED 🎁",
-            description=f"**Prize:** {prize}\n\n❌ No one entered the giveaway.",
+            title="ðŸŽ GIVEAWAY ENDED ðŸŽ",
+            description=f"**Prize:** {prize}\n\nâŒ No one entered the giveaway.",
             color=discord.Color.red()
         )
         await message.edit(embed=no_winner_embed)
@@ -97,56 +98,66 @@ async def run_giveaway(channel, prize, duration, winners_count, embed_msg, view)
     winner_mentions = ", ".join([f"<@{w_id}>" for w_id in winners])
 
     ended_embed = discord.Embed(
-        title="🎁 GIVEAWAY ENDED 🎁",
+        title="ðŸŽ GIVEAWAY ENDED ðŸŽ",
         description=f"**Prize:** {prize}\n**Winners:** {winner_mentions}",
         color=discord.Color.gold()
     )
     await message.edit(embed=ended_embed)
-    await channel.send(f"🎉 Congratulations {winner_mentions}! You won **{prize}**!")
+    await channel.send(f"ðŸŽ‰ Congratulations {winner_mentions}! You won **{prize}**!")
 
-# --- 5. FIXED PREFIX COMMAND DEFINITIONS ---
+# --- 5. THE INSTANT SYNC COMMAND (PREFIX) ---
+@bot.command()
+@commands.has_permissions(administrator=True)
+async def sync(ctx):
+    await ctx.send("ðŸ”„ Force syncing slash commands to this server...")
+    bot.tree.copy_global_to(guild=ctx.guild)
+    synced = await bot.tree.sync(guild=ctx.guild)
+    await ctx.send(f"âœ… Success! Synced {len(synced)} commands instantly. Try your slash commands now!")
 
-# 1. New !giveaway Prefix Command
-@bot.command(name="giveaway")
-@commands.has_permissions(manage_guild=True)
-async def start_giveaway(ctx, duration: str, winners: int, *, prize: str):
-    """
-    Usage: !giveaway <duration> <winners> <prize>
-    Example: !giveaway 10m 1 Discord Nitro Classic
-    """
+# --- 6. SLASH COMMAND DEFINITIONS ---
+
+# 1. New Delete Ticket Slash Command
+@bot.tree.command(name="delete-ticket", description="Permanently delete a support ticket channel.")
+@app_commands.checks.has_permissions(manage_channels=True)
+async def delete_ticket(interaction: discord.Interaction):
+    channel = interaction.channel
+    
+    # Security check: Make sure this command is only used inside ticket channels
+    if not channel.name.startswith("ticket-"):
+        await interaction.response.send_message("âŒ This command can only be used inside active ticket channels!", ephemeral=True)
+        return
+
+    # Acknowledge and display a clean countdown warning
+    await interaction.response.send_message("ðŸ”’ **Ticket Closed.** This channel will be deleted in 5 seconds...")
+    
+    # Wait for the countdown to complete, then delete the channel
+    await asyncio.sleep(5)
+    await channel.delete()
+
+# 2. Giveaway Slash Command
+@bot.tree.command(name="giveaway", description="Start an interactive community giveaway event.")
+@app_commands.checks.has_permissions(manage_guild=True)
+@app_commands.describe(
+    prize="What are you giving away?",
+    duration="When does it end? (e.g. 30s, 10m, 2h)",
+    winners="How many random winners should be drawn?"
+)
+async def start_giveaway(interaction: discord.Interaction, prize: str, duration: str, winners: int):
     seconds = parse_duration(duration)
     if seconds is None:
-        await ctx.send("❌ Use formatting patterns like `30s`, `10m`, `2h`, or `1d` for the duration parameter.")
-        return
-    if winners < 1:
-        await ctx.send("❌ You must choose at least 1 winner.")
+        await interaction.response.send_message("âŒ Use formats like `30s`, `10m`, `2h`.", ephemeral=True)
         return
 
     embed = discord.Embed(
-        title="🎉 NEW GIVEAWAY 🎉",
-        description=f"Click the button below to enter!\n\n🎁 **Prize:** {prize}\n⏱️ **Duration:** {duration}\n👥 **Winners:** {winners}",
+        title="ðŸŽ‰ NEW GIVEAWAY ðŸŽ‰",
+        description=f"Click the button below to enter!\n\nðŸŽ **Prize:** {prize}\nâ±ï¸ **Duration:** {duration}\nðŸ‘¥ **Winners:** {winners}",
         color=discord.Color.purple()
     )
-    embed.set_footer(text=f"Started by {ctx.author.name}")
     
     view = GiveawayView()
-    embed_msg = await ctx.send(embed=embed, view=view)
-    
-    # Automatically delete the triggering instruction command message to keep chat clean
-    try:
-        await ctx.message.delete()
-    except discord.Forbidden:
-        pass
-
-    asyncio.create_task(run_giveaway(ctx.channel, prize, seconds, winners, embed_msg, view))
-
-# Error Handler for missing permissions or incorrect typing inputs
-@start_giveaway.error
-async def giveaway_error(ctx, error):
-    if isinstance(error, commands.MissingRequiredArgument):
-        await ctx.send("❌ **Incorrect Usage!** Please use the command format exactly like this:\n`!giveaway <duration> <winners> <prize>`\n\n*Example:* `!giveaway 5m 1 Discord Nitro`")
-    elif isinstance(error, commands.MissingPermissions):
-        await ctx.send("❌ You need the **Manage Server** permission to run giveaways.")
+    await interaction.response.send_message("Starting giveaway...", ephemeral=True)
+    embed_msg = await interaction.channel.send(embed=embed, view=view)
+    asyncio.create_task(run_giveaway(interaction.channel, prize, seconds, winners, embed_msg, view))
 
 # Run command
 TOKEN = os.environ.get("DISCORD_TOKEN")
