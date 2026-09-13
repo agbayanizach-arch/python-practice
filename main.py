@@ -1,5 +1,6 @@
 import os
 import json
+import asyncio
 import discord
 from discord import app_commands
 from discord.ext import commands
@@ -39,7 +40,7 @@ def save_config(data):
     with open(CONFIG_FILE, "w") as f:
         json.dump(data, f, indent=4)
 
-# --- 3. PERSISTENT TICKET VIEWS (FROM PREVIOUS STEP) ---
+# --- 3. PERSISTENT TICKET VIEWS ---
 class TicketControls(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
@@ -74,7 +75,6 @@ class TicketCloseControl(discord.ui.View):
     @discord.ui.button(label="Close Ticket 🔒", style=discord.ButtonStyle.red, custom_id="close_ticket_btn")
     async def close_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_message("🔒 This ticket will be deleted in 5 seconds...")
-        import asyncio
         await asyncio.sleep(5)
         await interaction.channel.delete()
 
@@ -103,23 +103,38 @@ async def on_ready():
 async def on_member_join(member):
     config = load_config()
     guild_id = str(member.guild.id)
-    
     if guild_id not in config:
         return
-        
     channel_id = config[guild_id].get("welcome_channel")
     welcome_text = config[guild_id].get("welcome_message", "Welcome {member} to the server!")
-    
     if channel_id:
         channel = member.guild.get_channel(int(channel_id))
         if channel:
-            # Replace placeholder token with actual member mention dynamically
             final_message = welcome_text.replace("{member}", member.mention)
             await channel.send(final_message)
 
 # --- 6. SLASH COMMAND DEFINITIONS ---
 
-# Ticket Command
+# 1. Purge / Clear Messages Command
+@bot.tree.command(name="purge", description="Delete a specified number of recent messages from this channel.")
+@app_commands.checks.has_permissions(manage_messages=True)
+@app_commands.describe(amount="The total number of messages to permanently clear (Max: 100).")
+async def purge_messages(interaction: discord.Interaction, amount: int):
+    # Enforce safe limits to avoid unintended API flooding
+    if amount < 1 or amount > 100:
+        await interaction.response.send_message("❌ Please enter a message amount between 1 and 100.", ephemeral=True)
+        return
+
+    # Acknowledge the interaction instantly so it doesn't time out while deleting
+    await interaction.response.defer(ephemeral=True)
+    
+    # Execute the mass deletion sweep
+    deleted = await interaction.channel.purge(limit=amount)
+    
+    # Follow up to let the moderator know it finished successfully
+    await interaction.followup.send(f"🧹 Successfully cleared **{len(deleted)}** messages from this channel!", ephemeral=True)
+
+# 2. Ticket Setup Command
 @bot.tree.command(name="ticket-setup", description="Deploy the interactive support ticket panel into this channel.")
 @app_commands.checks.has_permissions(administrator=True)
 async def ticket_setup(interaction: discord.Interaction):
@@ -133,62 +148,49 @@ async def ticket_setup(interaction: discord.Interaction):
     await interaction.response.send_message("Deploying ticket dashboard...", ephemeral=True)
     await interaction.channel.send(embed=embed, view=view)
 
-# 1. Custom Welcome Message Configuration Command
+# 3. Custom Welcome Template Command
 @bot.tree.command(name="customwelcome", description="Set the template text for greeting new users. Use '{member}' as a placement tag.")
 @app_commands.checks.has_permissions(administrator=True)
-@app_commands.describe(message="The message to display. Example: Welcome {member} to our awesome gaming server!")
 async def custom_welcome(interaction: discord.Interaction, message: str):
     config = load_config()
     guild_id = str(interaction.guild_id)
-    
     if guild_id not in config:
         config[guild_id] = {}
-        
     config[guild_id]["welcome_message"] = message
     save_config(config)
-    
     await interaction.response.send_message(f"✅ **Welcome message updated!**\nPreview template:\n> {message}", ephemeral=True)
 
-# 2. Welcome Channel Destination Setup Command
+# 4. Welcome Destination Channel Command
 @bot.tree.command(name="channel_set", description="Assign which target text channel your welcome greeting card will drop into.")
 @app_commands.checks.has_permissions(administrator=True)
-@app_commands.describe(channel="The target text channel.")
 async def channel_set(interaction: discord.Interaction, channel: discord.TextChannel):
     config = load_config()
     guild_id = str(interaction.guild_id)
-    
     if guild_id not in config:
         config[guild_id] = {}
-        
     config[guild_id]["welcome_channel"] = str(channel.id)
     save_config(config)
-    
     await interaction.response.send_message(f"✅ **Success!** Welcome alerts will now target: {channel.mention}", ephemeral=True)
 
-# 3. Greet System Diagnostics Verification Command
+# 5. Greet Diagnostics Simulator Command
 @bot.tree.command(name="greettest", description="Simulate a new member join entry event to test your greeting pipeline layouts.")
 @app_commands.checks.has_permissions(administrator=True)
 async def greet_test(interaction: discord.Interaction):
     config = load_config()
     guild_id = str(interaction.guild_id)
-    
     if guild_id not in config or "welcome_channel" not in config[guild_id]:
         await interaction.response.send_message("❌ **Configuration Missing!** Please bind a target channel first using `/channel_set`.", ephemeral=True)
         return
-        
     channel_id = config[guild_id].get("welcome_channel")
     welcome_text = config[guild_id].get("welcome_message", "Welcome {member} to the server!")
-    
     channel = interaction.guild.get_channel(int(channel_id))
     if not channel:
         await interaction.response.send_message("❌ **Target Channel Not Found!** Reconfigure your target endpoint destination with `/channel_set`.", ephemeral=True)
         return
-        
     final_message = welcome_text.replace("{member}", interaction.user.mention)
-    
     await interaction.response.send_message("🧪 Executing welcome workflow test trigger pipeline simulation...", ephemeral=True)
     await channel.send(f"⚠️ **[GREET SIMULATION TEST]**\n{final_message}")
 
-# Running step
+# --- 7. START RUN RUN ---
 TOKEN = os.environ.get("DISCORD_TOKEN")
 bot.run(TOKEN)
