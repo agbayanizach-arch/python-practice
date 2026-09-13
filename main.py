@@ -4,7 +4,6 @@ import asyncio
 import random
 import re
 import discord
-from discord import app_commands
 from discord.ext import commands
 from flask import Flask
 from threading import Thread
@@ -105,47 +104,22 @@ async def run_giveaway(channel, prize, duration, winners_count, embed_msg, view)
     await message.edit(embed=ended_embed)
     await channel.send(f"🎉 Congratulations {winner_mentions}! You won **{prize}**!")
 
-# --- 5. THE INSTANT SYNC COMMAND (PREFIX) ---
-@bot.command()
-@commands.has_permissions(administrator=True)
-async def sync(ctx):
-    await ctx.send("🔄 Force syncing slash commands to this server...")
-    bot.tree.copy_global_to(guild=ctx.guild)
-    synced = await bot.tree.sync(guild=ctx.guild)
-    await ctx.send(f"✅ Success! Synced {len(synced)} commands instantly. Try your slash commands now!")
+# --- 5. FIXED PREFIX COMMAND DEFINITIONS ---
 
-# --- 6. SLASH COMMAND DEFINITIONS ---
-
-# 1. New Delete Ticket Slash Command
-@bot.tree.command(name="delete-ticket", description="Permanently delete a support ticket channel.")
-@app_commands.checks.has_permissions(manage_channels=True)
-async def delete_ticket(interaction: discord.Interaction):
-    channel = interaction.channel
-    
-    # Security check: Make sure this command is only used inside ticket channels
-    if not channel.name.startswith("ticket-"):
-        await interaction.response.send_message("❌ This command can only be used inside active ticket channels!", ephemeral=True)
-        return
-
-    # Acknowledge and display a clean countdown warning
-    await interaction.response.send_message("🔒 **Ticket Closed.** This channel will be deleted in 5 seconds...")
-    
-    # Wait for the countdown to complete, then delete the channel
-    await asyncio.sleep(5)
-    await channel.delete()
-
-# 2. Giveaway Slash Command
-@bot.tree.command(name="giveaway", description="Start an interactive community giveaway event.")
-@app_commands.checks.has_permissions(manage_guild=True)
-@app_commands.describe(
-    prize="What are you giving away?",
-    duration="When does it end? (e.g. 30s, 10m, 2h)",
-    winners="How many random winners should be drawn?"
-)
-async def start_giveaway(interaction: discord.Interaction, prize: str, duration: str, winners: int):
+# 1. New !giveaway Prefix Command
+@bot.command(name="giveaway")
+@commands.has_permissions(manage_guild=True)
+async def start_giveaway(ctx, duration: str, winners: int, *, prize: str):
+    """
+    Usage: !giveaway <duration> <winners> <prize>
+    Example: !giveaway 10m 1 Discord Nitro Classic
+    """
     seconds = parse_duration(duration)
     if seconds is None:
-        await interaction.response.send_message("❌ Use formats like `30s`, `10m`, `2h`.", ephemeral=True)
+        await ctx.send("❌ Use formatting patterns like `30s`, `10m`, `2h`, or `1d` for the duration parameter.")
+        return
+    if winners < 1:
+        await ctx.send("❌ You must choose at least 1 winner.")
         return
 
     embed = discord.Embed(
@@ -153,11 +127,26 @@ async def start_giveaway(interaction: discord.Interaction, prize: str, duration:
         description=f"Click the button below to enter!\n\n🎁 **Prize:** {prize}\n⏱️ **Duration:** {duration}\n👥 **Winners:** {winners}",
         color=discord.Color.purple()
     )
+    embed.set_footer(text=f"Started by {ctx.author.name}")
     
     view = GiveawayView()
-    await interaction.response.send_message("Starting giveaway...", ephemeral=True)
-    embed_msg = await interaction.channel.send(embed=embed, view=view)
-    asyncio.create_task(run_giveaway(interaction.channel, prize, seconds, winners, embed_msg, view))
+    embed_msg = await ctx.send(embed=embed, view=view)
+    
+    # Automatically delete the triggering instruction command message to keep chat clean
+    try:
+        await ctx.message.delete()
+    except discord.Forbidden:
+        pass
+
+    asyncio.create_task(run_giveaway(ctx.channel, prize, seconds, winners, embed_msg, view))
+
+# Error Handler for missing permissions or incorrect typing inputs
+@start_giveaway.error
+async def giveaway_error(ctx, error):
+    if isinstance(error, commands.MissingRequiredArgument):
+        await ctx.send("❌ **Incorrect Usage!** Please use the command format exactly like this:\n`!giveaway <duration> <winners> <prize>`\n\n*Example:* `!giveaway 5m 1 Discord Nitro`")
+    elif isinstance(error, commands.MissingPermissions):
+        await ctx.send("❌ You need the **Manage Server** permission to run giveaways.")
 
 # Run command
 TOKEN = os.environ.get("DISCORD_TOKEN")
