@@ -32,17 +32,17 @@ class GiveawayView(discord.ui.View):
         super().__init__(timeout=None)
         self.entrants = set()
 
-    @discord.ui.button(label="Join ðŸŽ‰", style=discord.ButtonStyle.blurple, custom_id="join_giveaway_btn")
+    @discord.ui.button(label="Join 🎉", style=discord.ButtonStyle.blurple, custom_id="join_giveaway_btn")
     async def join_giveaway(self, interaction: discord.Interaction, button: discord.ui.Button):
         user_id = interaction.user.id
         if user_id in self.entrants:
             self.entrants.remove(user_id)
-            await interaction.response.send_message("ðŸ‘‹ You left the giveaway.", ephemeral=True)
+            await interaction.response.send_message("👋 You left the giveaway.", ephemeral=True)
         else:
             self.entrants.add(user_id)
-            await interaction.response.send_message("ðŸŽ‰ You have successfully entered the giveaway!", ephemeral=True)
+            await interaction.response.send_message("🎉 You have successfully entered the giveaway!", ephemeral=True)
         
-        button.label = f"Join ðŸŽ‰ ({len(self.entrants)})"
+        button.label = f"Join 🎉 ({len(self.entrants)})"
         await interaction.message.edit(view=self)
 
 # --- 3. BOT ARCHITECTURE ---
@@ -86,8 +86,8 @@ async def run_giveaway(channel, prize, duration, winners_count, embed_msg, view)
     entrants_list = list(view.entrants)
     if not entrants_list:
         no_winner_embed = discord.Embed(
-            title="ðŸŽ GIVEAWAY ENDED ðŸŽ",
-            description=f"**Prize:** {prize}\n\nâŒ No one entered the giveaway.",
+            title="🎁 GIVEAWAY ENDED 🎁",
+            description=f"**Prize:** {prize}\n\n❌ No one entered the giveaway.",
             color=discord.Color.red()
         )
         await message.edit(embed=no_winner_embed)
@@ -98,21 +98,21 @@ async def run_giveaway(channel, prize, duration, winners_count, embed_msg, view)
     winner_mentions = ", ".join([f"<@{w_id}>" for w_id in winners])
 
     ended_embed = discord.Embed(
-        title="ðŸŽ GIVEAWAY ENDED ðŸŽ",
+        title="🎁 GIVEAWAY ENDED 🎁",
         description=f"**Prize:** {prize}\n**Winners:** {winner_mentions}",
         color=discord.Color.gold()
     )
     await message.edit(embed=ended_embed)
-    await channel.send(f"ðŸŽ‰ Congratulations {winner_mentions}! You won **{prize}**!")
+    await channel.send(f"🎉 Congratulations {winner_mentions}! You won **{prize}**!")
 
 # --- 5. THE INSTANT SYNC COMMAND (PREFIX) ---
 @bot.command()
 @commands.has_permissions(administrator=True)
 async def sync(ctx):
-    await ctx.send("ðŸ”„ Force syncing slash commands to this server...")
+    await ctx.send("🔄 Force syncing slash commands to this server...")
     bot.tree.copy_global_to(guild=ctx.guild)
     synced = await bot.tree.sync(guild=ctx.guild)
-    await ctx.send(f"âœ… Success! Synced {len(synced)} commands instantly. Try your slash commands now!")
+    await ctx.send(f"✅ Success! Synced {len(synced)} commands instantly. Try your slash commands now!")
 
 # --- 6. SLASH COMMAND DEFINITIONS ---
 
@@ -124,11 +124,11 @@ async def delete_ticket(interaction: discord.Interaction):
     
     # Security check: Make sure this command is only used inside ticket channels
     if not channel.name.startswith("ticket-"):
-        await interaction.response.send_message("âŒ This command can only be used inside active ticket channels!", ephemeral=True)
+        await interaction.response.send_message("❌ This command can only be used inside active ticket channels!", ephemeral=True)
         return
 
     # Acknowledge and display a clean countdown warning
-    await interaction.response.send_message("ðŸ”’ **Ticket Closed.** This channel will be deleted in 5 seconds...")
+    await interaction.response.send_message("🔒 **Ticket Closed.** This channel will be deleted in 5 seconds...")
     
     # Wait for the countdown to complete, then delete the channel
     await asyncio.sleep(5)
@@ -145,12 +145,12 @@ async def delete_ticket(interaction: discord.Interaction):
 async def start_giveaway(interaction: discord.Interaction, prize: str, duration: str, winners: int):
     seconds = parse_duration(duration)
     if seconds is None:
-        await interaction.response.send_message("âŒ Use formats like `30s`, `10m`, `2h`.", ephemeral=True)
+        await interaction.response.send_message("❌ Use formats like `30s`, `10m`, `2h`.", ephemeral=True)
         return
 
     embed = discord.Embed(
-        title="ðŸŽ‰ NEW GIVEAWAY ðŸŽ‰",
-        description=f"Click the button below to enter!\n\nðŸŽ **Prize:** {prize}\nâ±ï¸ **Duration:** {duration}\nðŸ‘¥ **Winners:** {winners}",
+        title="🎉 NEW GIVEAWAY 🎉",
+        description=f"Click the button below to enter!\n\n🎁 **Prize:** {prize}\n⏱️ **Duration:** {duration}\n👥 **Winners:** {winners}",
         color=discord.Color.purple()
     )
     
