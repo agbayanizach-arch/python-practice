@@ -16,7 +16,6 @@ import random
 from io import BytesIO
 from PIL import Image
 import threading
-from keep_alive import keep_alive
 import traceback
 import time
 from typing import Optional
