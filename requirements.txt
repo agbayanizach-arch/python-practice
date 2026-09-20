@@ -3,4 +3,4 @@ aiohttp
 flask
 requests
 PySocks
-git+https://github.com
+pyCraft
