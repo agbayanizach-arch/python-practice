@@ -3,4 +3,4 @@ aiohttp
 flask
 requests
 PySocks
-mclib
+git+https://github.com
