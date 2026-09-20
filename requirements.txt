@@ -3,4 +3,4 @@ aiohttp
 flask
 requests
 PySocks
-pyCraft
+minecraft-launcher-lib
