@@ -1,21 +1,18 @@
-# Add this import at the top
-from keep_alive import keep_alive
+import discord
+from discord import app_commands
+from discord.ext import commands
+import asyncio
+from checker import MaceChecker
+from embed_builder import EmbedBuilder
+import sys
+import aiohttp
+import io
+import json
+import os                    # <--- MAKE SURE THIS IS IMPORTED
+from keep_alive import keep_alive  # <--- MAKE SURE THIS IS IMPORTED
 
-# ... keep the rest of your code ...
+# --- GRAB CREDENTIALS SECURELY FROM RENDER ---
+TOKEN = os.environ.get("DISCORD_TOKEN")
+WEBHOOK_URL = os.environ.get("WEBHOOK_URL")
 
-if __name__ == "__main__":
-    if TOKEN == "YOUR_DISCORD_BOT_TOKEN_HERE":
-        print("❌ ERROR: Please set your Discord Bot Token!")
-        # Note: input() will crash on Render, so we will use Environment Variables instead
-        import os
-        TOKEN = os.environ.get("DISCORD_TOKEN")
-         
-    if not TOKEN:
-         print("Exiting...")
-         sys.exit(1)
-         
-    try:
-        keep_alive() # <--- CALL THIS HERE to start the web server
-        client.run(TOKEN)
-    except Exception as e:
-        print(f"❌ Error running bot: {e}")
+# ... leave your MaceCloudBot class and check commands exactly as they are ...
