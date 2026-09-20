@@ -3,5 +3,4 @@ aiohttp
 flask
 requests
 PySocks
-pyCraft
-minecraft-data
+mclib
